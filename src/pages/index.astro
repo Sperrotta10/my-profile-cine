@@ -1,0 +1,54 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Starfield from '../components/Starfield.astro';
+import ProfileHeader from '../components/ProfileHeader.astro';
+import PlatformCard from '../components/PlatformCard.astro';
+import SeriesGrid from '../components/SeriesGrid.astro';
+---
+
+<BaseLayout
+  title="Mi Perfil de Cine & TV"
+  description="Mis reseñas y seguimiento diario de películas y series: Letterboxd y Serializd."
+>
+  <!-- Luces estelares de fondo (animadas) -->
+  <div
+    class="bg-glow orb bg-emerald-500 -top-20 -left-20"
+    style="--orb-dx:40px;--orb-dy:25px;--orb-scale:1.08;--orb-opacity-min:0.10;--orb-opacity-max:0.20;animation-duration:20s,7s;"
+  ></div>
+  <div
+    class="bg-glow orb bg-violet-600 top-1/3 -right-20"
+    style="--orb-dx:-35px;--orb-dy:-30px;--orb-scale:1.06;--orb-opacity-min:0.08;--orb-opacity-max:0.18;animation-duration:24s,8s;"
+  ></div>
+  <div
+    class="bg-glow orb bg-amber-500 -bottom-28 left-1/2 -translate-x-1/2"
+    style="--orb-dx:20px;--orb-dy:-20px;--orb-scale:1.1;--orb-opacity-min:0.06;--orb-opacity-max:0.14;animation-duration:16s,5s;"
+  ></div>
+
+  <Starfield />
+
+  <main
+    class="relative z-10 mx-auto flex w-full max-w-2xl flex-col items-center px-4 py-12"
+  >
+    <ProfileHeader />
+
+    <!-- Redirecciones / Cards -->
+    <section class="w-full space-y-5">
+      <PlatformCard
+        name="Letterboxd"
+        tagline="Películas y Diario de cine"
+        href="https://letterboxd.com/Hater_movies/"
+        icon="clapperboard"
+        accent="green"
+      />
+      <PlatformCard
+        name="Serializd"
+        tagline="Seguimiento de Series de TV"
+        href="https://serializd.com/user/Hater_shows/profile"
+        icon="tv"
+        accent="violet"
+      />
+    </section>
+
+    <SeriesGrid />
+  </main>
+</BaseLayout>

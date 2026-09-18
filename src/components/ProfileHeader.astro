@@ -1,0 +1,79 @@
+---
+import { Icon } from 'astro-icon/components';
+
+const AVATAR =
+  'https://serializd-aws-s3.b-cdn.net/public/user_images/1e30eb0d-3b26-4be0-877c-df0d291fdf48.jpg?auto=format&fit=crop&w=300&q=80';
+---
+
+<header class="mb-8 flex flex-col items-center text-center">
+  <div class="group relative mb-5">
+    <div
+      class="absolute -inset-0.5 rounded-full bg-gradient-to-r from-emerald-500 via-cyan-500 to-violet-600 opacity-50 blur transition duration-500 group-hover:opacity-100"
+    ></div>
+    <div
+      class="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-2 border-slate-700/80 bg-slate-900 shadow-2xl"
+    >
+      <img
+        src={AVATAR}
+        alt="Avatar de Hater_movies"
+        class="h-full w-full object-cover"
+        width="300"
+        height="300"
+        decoding="async"
+      />
+    </div>
+  </div>
+
+  <h1
+    class="font-display mb-2 flex items-center gap-2 text-3xl font-extrabold text-white md:text-4xl"
+  >
+    <span>Mi Perfil de Cine</span>
+    <Icon name="lucide:popcorn" class="h-7 w-7 text-amber-400" />
+  </h1>
+  <p class="max-w-md text-sm text-slate-400">
+    Mis reseñas y seguimiento diario de películas y series.
+  </p>
+
+  <button
+    id="share-button"
+    type="button"
+    class="glass-card mt-4 flex items-center gap-2 rounded-full border border-slate-700/50 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-800/60 active:scale-95"
+  >
+    <Icon name="lucide:share-2" class="h-3.5 w-3.5" />
+    <span>Compartir Perfil</span>
+  </button>
+</header>
+
+<div
+  id="toast"
+  class="glass-card fixed right-5 top-5 z-50 flex translate-y-[-150%] items-center gap-3 rounded-xl border border-emerald-500/30 px-4 py-3 text-emerald-400 opacity-0 shadow-xl transition-all duration-300 ease-in-out"
+  role="status"
+  aria-live="polite"
+>
+  <Icon name="lucide:check-circle" class="h-5 w-5" />
+  <span class="text-sm font-medium" id="toast-message">¡Enlace copiado al portapapeles!</span>
+</div>
+
+<script>
+  const button = document.getElementById('share-button');
+  const toast = document.getElementById('toast');
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  button?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+    } catch {
+      // ignored: the visibility feedback still guides the user
+    }
+
+    if (timer) clearTimeout(timer);
+    toast?.classList.remove('translate-y-[-150%]', 'opacity-0');
+    toast?.classList.add('translate-y-0', 'opacity-100');
+
+    timer = setTimeout(() => {
+      toast?.classList.remove('translate-y-0', 'opacity-100');
+      toast?.classList.add('translate-y-[-150%]', 'opacity-0');
+    }, 3000);
+  });
+</script>

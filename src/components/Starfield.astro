@@ -1,0 +1,423 @@
+---
+
+---
+
+<canvas
+  id="starfield"
+  aria-hidden="true"
+  class="pointer-events-none fixed inset-0 z-0 h-full w-full"
+></canvas>
+
+<script>
+  const canvas = document.getElementById('starfield') as HTMLCanvasElement;
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  interface Star {
+    x: number;
+    y: number;
+    z: number;
+    r: number;
+    tw: number;
+    twSpeed: number;
+    hue: string;
+    glowHue: string;
+    driftX: number;
+    driftY: number;
+    glintPhase: number;
+    glintSpeed: number;
+  }
+
+  interface Meteor {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    life: number;
+    max: number;
+    len: number;
+  }
+
+  interface Particle {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    life: number;
+    max: number;
+    r: number;
+  }
+
+  interface Constellation {
+    starIdx: number[];
+    lines: [number, number][];
+    phase: number;
+    phaseSpeed: number;
+  }
+
+  let W = window.innerWidth;
+  let H = window.innerHeight;
+  let stars: Star[] = [];
+  let meteors: Meteor[] = [];
+  let particles: Particle[] = [];
+  let constellations: Constellation[] = [];
+  let framesUntilMeteor = 200;
+  let raf = 0;
+  let last = performance.now();
+  let resizePending = 0;
+
+  const target = { x: 0, y: 0 };
+  const current = { x: 0, y: 0 };
+
+  const palette = {
+    cool: '170, 210, 255',
+    warm: '255, 215, 155',
+    white: '230, 240, 255',
+  };
+
+  const glowPalette = {
+    cool: '90, 150, 255',
+    warm: '255, 185, 110',
+    white: '190, 210, 255',
+  };
+
+  function starCount(): number {
+    if (W < 640) return 90;
+    if (W < 1024) return 140;
+    return 200;
+  }
+
+  function makeStars(): void {
+    const n = starCount();
+    stars = Array.from({ length: n }, () => {
+      const bright = Math.random() < 0.15;
+      const warm = Math.random() < 0.06;
+      const hue = warm ? palette.warm : bright ? palette.cool : palette.white;
+      const glowHue = warm ? glowPalette.warm : bright ? glowPalette.cool : glowPalette.white;
+      const size = bright ? 1.4 + Math.random() * 1.3 : 0.5 + Math.random() * 0.9;
+      return {
+        x: Math.random() * W,
+        y: Math.random() * H,
+        z: 0.2 + Math.random() * 0.8,
+        r: size,
+        tw: Math.random() * Math.PI * 2,
+        twSpeed: 1.0 + Math.random() * 2.2,
+        hue,
+        glowHue,
+        driftX: (Math.random() * 2 - 1) * 0.18,
+        driftY: (Math.random() * 2 - 1) * 0.18,
+        glintPhase: Math.random() * Math.PI * 2,
+        glintSpeed: 0.003 + Math.random() * 0.005,
+      };
+    });
+  }
+
+  function makeConstellations(): void {
+    const brightIdx: number[] = [];
+    for (let i = 0; i < stars.length; i++) {
+      if (stars[i].r > 1.3) brightIdx.push(i);
+    }
+    constellations = [];
+    const groupSize = 4;
+    for (let g = 0; g < Math.min(3, Math.floor(brightIdx.length / groupSize)); g++) {
+      const slice = brightIdx.slice(g * groupSize, (g + 1) * groupSize);
+      if (slice.length < 3) continue;
+      const lines: [number, number][] = [];
+      for (let i = 0; i < slice.length - 1; i++) {
+        lines.push([slice[i], slice[i + 1]]);
+      }
+      constellations.push({
+        starIdx: slice,
+        lines,
+        phase: Math.random() * Math.PI * 2,
+        phaseSpeed: 0.0008 + Math.random() * 0.0006,
+      });
+    }
+  }
+
+  function resize(): void {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    makeStars();
+    makeConstellations();
+    if (reduceMotion) drawStatic();
+  }
+
+  function spawnMeteorBurst(): void {
+    const count = 1 + Math.floor(Math.random() * 3);
+    for (let b = 0; b < count; b++) {
+      const fromLeft = Math.random() < 0.5;
+      const speed = 10 + Math.random() * 9;
+      const angle = 0.12 + Math.random() * 0.12;
+      const vx = (fromLeft ? 1 : -1) * speed * Math.cos(angle);
+      const vy = Math.abs(speed * Math.sin(angle));
+      meteors.push({
+        x: fromLeft ? -40 - b * 30 : W + 40 + b * 30,
+        y: Math.random() * H * 0.3 + b * 15,
+        vx,
+        vy,
+        life: 0,
+        max: 65 + Math.random() * 30,
+        len: 18 + Math.random() * 14,
+      });
+    }
+  }
+
+  function spawnParticles(m: Meteor): void {
+    const count = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < count; i++) {
+      const spread = (Math.random() - 0.5) * 1.5;
+      const speed = 0.3 + Math.random() * 0.6;
+      particles.push({
+        x: m.x + spread * 3,
+        y: m.y + spread * 3,
+        vx: -m.vx * 0.02 * speed + spread,
+        vy: -m.vy * 0.02 * speed + spread * 0.5,
+        life: 0,
+        max: 18 + Math.random() * 16,
+        r: 0.4 + Math.random() * 0.5,
+      });
+    }
+  }
+
+  function drawStars(dt: number): void {
+    for (const s of stars) {
+      s.x += s.driftX * s.z * dt;
+      s.y += s.driftY * s.z * dt;
+      if (s.x < -10) s.x = W + 10;
+      else if (s.x > W + 10) s.x = -10;
+      if (s.y < -10) s.y = H + 10;
+      else if (s.y > H + 10) s.y = -10;
+
+      s.tw += s.twSpeed * 0.015 * dt;
+      s.glintPhase += s.glintSpeed * dt;
+
+      const px = current.x * 40 * s.z;
+      const py = current.y * 30 * s.z;
+      const x = s.x - px;
+      const y = s.y - py;
+      const twinkle = 0.5 + 0.5 * Math.sin(s.tw);
+      const alpha = 0.45 + 0.55 * twinkle;
+
+      // Glow halo for bigger stars
+      if (s.r > 1.2) {
+        ctx.fillStyle = `rgba(${s.glowHue}, ${alpha * 0.15})`;
+        ctx.beginPath();
+        ctx.arc(x, y, s.r * 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Core star
+      ctx.fillStyle = `rgba(${s.hue}, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(x, y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Cross glint for bright stars
+      if (s.r > 1.4) {
+        const glint = Math.pow(Math.max(0, Math.sin(s.glintPhase)), 16);
+        if (glint > 0.05) {
+          const gLen = (6 + s.r * 3) * glint;
+          const gAlpha = glint * 0.6;
+          ctx.strokeStyle = `rgba(${s.hue}, ${gAlpha})`;
+          ctx.lineWidth = 0.6;
+          ctx.lineCap = 'round';
+
+          // Vertical bar
+          ctx.beginPath();
+          ctx.moveTo(x, y - gLen);
+          ctx.lineTo(x, y + gLen);
+          ctx.stroke();
+
+          // Horizontal bar
+          ctx.beginPath();
+          ctx.moveTo(x - gLen, y);
+          ctx.lineTo(x + gLen, y);
+          ctx.stroke();
+
+          // Center dot
+          ctx.fillStyle = `rgba(255, 255, 255, ${gAlpha * 0.8})`;
+          ctx.beginPath();
+          ctx.arc(x, y, 0.8 + glint, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  function drawConstellations(): void {
+    for (const c of constellations) {
+      const fade = 0.5 + 0.5 * Math.sin(c.phase);
+      if (fade < 0.08) continue;
+
+      const alpha = fade * 0.18;
+      ctx.strokeStyle = `rgba(140, 180, 230, ${alpha})`;
+      ctx.lineWidth = 0.5;
+      ctx.setLineDash([3, 6]);
+      ctx.lineDashOffset = -c.phase * 20;
+
+      for (const [iA, iB] of c.lines) {
+        const a = stars[iA];
+        const b = stars[iB];
+        if (!a || !b) continue;
+        const pxA = current.x * 40 * a.z;
+        const pyA = current.y * 30 * a.z;
+        const pxB = current.x * 40 * b.z;
+        const pyB = current.y * 30 * b.z;
+
+        ctx.beginPath();
+        ctx.moveTo(a.x - pxA, a.y - pyA);
+        ctx.lineTo(b.x - pxB, b.y - pyB);
+        ctx.stroke();
+      }
+
+      ctx.setLineDash([]);
+    }
+  }
+
+  function drawMeteors(dt: number): void {
+    for (let i = meteors.length - 1; i >= 0; i--) {
+      const m = meteors[i];
+      m.life += dt;
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
+
+      const t = Math.min(m.life / m.max, 1);
+      const fade = Math.pow(1 - t, 1.3);
+
+      // Spawn particles along the trail
+      if (Math.random() < 0.3 && t < 0.8) {
+        spawnParticles(m);
+      }
+
+      const headX = m.x;
+      const headY = m.y;
+      const tailX = headX - m.vx * m.len * (1 - t * 0.4);
+      const tailY = headY - m.vy * m.len * (1 - t * 0.4);
+
+      const grad = ctx.createLinearGradient(headX, headY, tailX, tailY);
+      grad.addColorStop(0, `rgba(210, 228, 255, ${fade * 0.95})`);
+      grad.addColorStop(0.25, `rgba(170, 200, 255, ${fade * 0.55})`);
+      grad.addColorStop(1, 'rgba(140, 170, 255, 0)');
+
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.8 - t * 0.8;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(headX, headY);
+      ctx.lineTo(tailX, tailY);
+      ctx.stroke();
+
+      // Bright head
+      ctx.fillStyle = `rgba(255, 255, 255, ${fade * 0.85})`;
+      ctx.beginPath();
+      ctx.arc(headX, headY, 1.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (t >= 1) meteors.splice(i, 1);
+    }
+  }
+
+  function drawParticles(dt: number): void {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= 0.98;
+      p.vy *= 0.98;
+
+      const t = Math.min(p.life / p.max, 1);
+      const alpha = Math.pow(1 - t, 2) * 0.6;
+
+      ctx.fillStyle = `rgba(180, 210, 255, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r * (1 - t * 0.5), 0, Math.PI * 2);
+      ctx.fill();
+
+      if (t >= 1) particles.splice(i, 1);
+    }
+  }
+
+  function updateConstellations(dt: number): void {
+    for (const c of constellations) {
+      c.phase += c.phaseSpeed * dt;
+    }
+  }
+
+  function frame(now: number): void {
+    const dt = Math.min((now - last) / 16.667, 3);
+    last = now;
+
+    current.x += (target.x - current.x) * 0.04 * dt;
+    current.y += (target.y - current.y) * 0.04 * dt;
+
+    ctx.clearRect(0, 0, W, H);
+
+    framesUntilMeteor -= dt;
+    if (framesUntilMeteor <= 0) {
+      spawnMeteorBurst();
+      framesUntilMeteor = 320 + Math.random() * 400;
+    }
+
+    updateConstellations(dt);
+    drawStars(dt);
+    drawConstellations();
+    drawMeteors(dt);
+    drawParticles(dt);
+
+    raf = requestAnimationFrame(frame);
+  }
+
+  function drawStatic(): void {
+    ctx.clearRect(0, 0, W, H);
+    for (const s of stars) {
+      ctx.fillStyle = `rgba(${s.hue}, 0.65)`;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function start(): void {
+    if (reduceMotion) {
+      drawStatic();
+      return;
+    }
+    last = performance.now();
+    raf = requestAnimationFrame(frame);
+  }
+
+  function stop(): void {
+    cancelAnimationFrame(raf);
+  }
+
+  window.addEventListener('pointermove', (e) => {
+    target.x = (e.clientX / W) * 2 - 1;
+    target.y = (e.clientY / H) * 2 - 1;
+  });
+
+  window.addEventListener('resize', () => {
+    if (resizePending) cancelAnimationFrame(resizePending);
+    resizePending = requestAnimationFrame(() => {
+      resizePending = 0;
+      resize();
+    });
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop();
+    else if (!reduceMotion) start();
+  });
+
+  resize();
+  if (!reduceMotion) {
+    last = performance.now();
+    raf = requestAnimationFrame(frame);
+  }
+</script>
