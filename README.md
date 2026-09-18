@@ -45,11 +45,3 @@ pnpm check         # type-check con @astrojs/check (astro check)
 * **Avatar:** `AVATAR` en `src/components/ProfileHeader.astro`.
 * **Series:** array `series` en `src/components/SeriesGrid.astro` (título, seed de imagen y rating).
 * **URL del sitio:** `site` en `astro.config.mjs` (≈ URL final de Vercel).
-
-## 🚀 Deploy (Vercel)
-
-1. Empuja este repo a GitHub y conéctalo en [vercel.com](https://vercel.com).
-2. Vercel detecta Astro automáticamente (`pnpm build`, output `dist/`, static).
-3. Actualiza `site` en `astro.config.mjs` con tu dominio final.
-
-La receta original está en `instruction/project_documentation.md`.
