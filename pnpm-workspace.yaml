@@ -1,0 +1,7 @@
+onlyBuiltDependencies:
+  - esbuild
+  - '@tailwindcss/oxide'
+  - sharp
+  - '@parcel/watcher-win32-x64'
+
+dangerouslyAllowAllBuilds: true
